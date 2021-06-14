@@ -1,0 +1,10 @@
+lcd.c:12:6:lcd_rst	8	static
+lcd.c:23:6:lcd_wr_reg	16	static
+lcd.c:29:6:lcd_wr_cmd	16	static
+lcd.c:37:6:lcd_wr_reg_value	16	static
+lcd.c:44:14:lcd_rd_data	16	static
+lcd.c:55:6:lcd_wr_data	16	static
+lcd.c:60:6:lcd_wr_data_8	16	static
+lcd.c:65:5:mn	24	static
+lcd.c:73:5:mypow	24	static
+lcd.c:81:10:LCD_RGB2Pixel565	16	static
