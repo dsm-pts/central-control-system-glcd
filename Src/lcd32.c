@@ -1042,7 +1042,6 @@ void lcd32_print_TimeFont(u16 x, u16 y, u16 c, unsigned int color) {
 
 	tChar target = get_timeFont_tChar(c);
 
-	printf("%x\n", c);
 	int i = 0;
 	int j = 0;
 	u16 width = target.image->width;

@@ -16,4 +16,4 @@ lcd32.c:997:6:lcd32_show_string	24	static
 lcd32.c:1015:6:lcd32_draw_point_big	16	static
 lcd32.c:1022:7:get_timeFont_tChar	32	static
 lcd32.c:1040:6:lcd32_print_TimeFont	48	static
-lcd32.c:1074:6:lcd32_print_TimeFonts	40	static
+lcd32.c:1073:6:lcd32_print_TimeFonts	40	static

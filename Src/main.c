@@ -50,6 +50,8 @@
 ADC_HandleTypeDef hadc1;
 DMA_HandleTypeDef hdma_adc1;
 
+TIM_HandleTypeDef htim6;
+
 UART_HandleTypeDef huart1;
 
 SRAM_HandleTypeDef hsram1;
@@ -65,6 +67,7 @@ static void MX_DMA_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_FSMC_Init(void);
+static void MX_TIM6_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -86,6 +89,54 @@ PUTCHAR_PROTOTYPE
   HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, 0xFFFF);
   return ch;
 }
+unsigned char Timer_500m;
+extern TIM_HandleTypeDef htim6;
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+	if (htim->Instance == TIM6)
+	{
+		Timer_500m++;
+	}
+}
+
+uint8_t Rx_Data[2] = {0,};
+uint8_t Rx_Buffer[20] = {0,};
+uint8_t USART1_len = 0;
+uint8_t USART1_rx_end = 0;
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	static uint8_t usart1_chk = 0;
+	if(huart -> Instance == USART1)
+	{
+		USART1_rx_end = 0;
+		switch(usart1_chk)
+		{
+		case 0:
+			if (Rx_Data[0] == 0x02) {
+				Rx_Buffer[USART1_len] = Rx_Data[0];
+				USART1_len++;
+				usart1_chk = 1;
+			}
+			else usart1_chk = 0;
+			break;
+		case 1:
+			Rx_Buffer[USART1_len] = Rx_Data[0];
+			USART1_len++;
+
+			if (Rx_Data[0] == 0x03) {
+				USART1_rx_end = 1;
+				usart1_chk = 0;
+			}
+			break;
+		default:
+			usart1_chk = 0;
+			break;
+		}
+		HAL_UART_Receive_IT(&huart1, Rx_Data, 1);
+	}
+}
 /* USER CODE END 0 */
 
 /**
@@ -95,6 +146,13 @@ PUTCHAR_PROTOTYPE
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+	int seconds = 0;
+	int m = 0;
+	int s = 0;
+	int bef_m = 0;
+	int bef_s = 0;
+	int seconds_zero_flag = 0;
+	int seconds_init_falg = 0;
 
   /* USER CODE END 1 */
 
@@ -120,8 +178,11 @@ int main(void)
   MX_USART1_UART_Init();
   MX_ADC1_Init();
   MX_FSMC_Init();
+  MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
   setvbuf(stdout, NULL, _IONBF, 0);
+  HAL_TIM_Base_Start_IT(&htim6);
+  HAL_UART_Receive_IT(&huart1, Rx_Data, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -131,19 +192,90 @@ int main(void)
   lcd32_clear_screen(WHITE);
 
   lcd32_background_image();
-  int i = 0;
-  char str[] = "01:43 ";
-  for (i = 0; str[i] != '\0'; i++) {
-	  lcd32_print_TimeFont(35 + i * 30, 50, str[i], WHITE);
-  }
-  lcd32_print_TimeFonts(200, 50, (u16*)"ÈÄ", WHITE);
-  lcd32_print_TimeFonts(35, 120, (u16*)"µµÂø¿¹Á¤", WHITE);
+
+  u8 num_pos[5] = {237, 202, 177, 132, 97};
+  u8 lines_pos[3] = {140, 70, 100};
+
+  lcd32_print_TimeFonts(103, lines_pos[2], (u16*)"±â´ë", WHITE);
 
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  if (USART1_rx_end) {
+		  // PROTOCOL : 0x02 TYPE(1byte) CMD(1byte) DATA(2byte) 0x03
+		  u8 type = Rx_Buffer[1];
+		  u8 cmd = Rx_Buffer[2];
+		  u8 data[2] = { Rx_Buffer[3], Rx_Buffer[4] };
+
+		  printf("\x02RECEV : type(%d) cmd(%d) data(%x, %x)\x03", type, cmd, data[0], data[1]);
+		  // SENDER : RPI AND CMD : SET_SECONDS
+		  if (type == 1 && cmd == 1) {
+			  seconds = (data[0] << 8) | data[1];
+		  }
+		  if (!seconds_init_falg) {
+			  lcd32_print_TimeFonts(103, lines_pos[2], (u16*)"±â´ë", 0x8d59);
+			  lcd32_print_TimeFont(num_pos[0], lines_pos[0], m / 10 + '0', WHITE);
+			  lcd32_print_TimeFont(num_pos[1], lines_pos[0], m % 10 + '0', WHITE);
+			  lcd32_print_TimeFont(num_pos[2], lines_pos[0], ':', WHITE);
+			  lcd32_print_TimeFont(num_pos[3], lines_pos[0], s / 10 + '0', WHITE);
+			  lcd32_print_TimeFont(num_pos[4], lines_pos[0], s % 10 + '0', WHITE);
+			  lcd32_print_TimeFonts(42, lines_pos[0], (u16*)"ÈÄ", WHITE);
+			  lcd32_print_TimeFonts(45, lines_pos[1], (u16*)"Á¤¿¹Âøµµ", WHITE);
+			  seconds_init_falg = 1;
+		  }
+		  USART1_rx_end = 0;
+		  USART1_len = 0;
+	  }
+	  if (Timer_500m >= 2 && seconds >= 0 && seconds_init_falg) {
+		  if (seconds_zero_flag) {
+			  seconds_zero_flag = 0;
+			  lcd32_print_TimeFonts(103, lines_pos[2], (u16*)"Âøµµ", 0x8d59);
+			  lcd32_print_TimeFont(num_pos[0], lines_pos[0], m / 10 + '0', WHITE);
+			    lcd32_print_TimeFont(num_pos[1], lines_pos[0], m % 10 + '0', WHITE);
+			    lcd32_print_TimeFont(num_pos[2], lines_pos[0], ':', WHITE);
+			    lcd32_print_TimeFont(num_pos[3], lines_pos[0], s / 10 + '0', WHITE);
+			    lcd32_print_TimeFont(num_pos[4], lines_pos[0], s % 10 + '0', WHITE);
+			  lcd32_print_TimeFonts(42, lines_pos[0], (u16*)"ÈÄ", WHITE);
+			  lcd32_print_TimeFonts(45, lines_pos[1], (u16*)"Á¤¿¹Âøµµ", WHITE);
+		  }
+		  m = seconds / 60;
+		  s = seconds % 60;
+		  seconds--;
+
+		  if (bef_m / 10 != m / 10) {
+			  lcd32_print_TimeFont(num_pos[0], lines_pos[0], bef_m / 10 + '0', 0x8d59);
+			  lcd32_print_TimeFont(num_pos[0], lines_pos[0], m / 10 + '0', WHITE);
+		  }
+		  if (bef_m % 10 != m % 10) {
+			  lcd32_print_TimeFont(num_pos[1], lines_pos[0], bef_m % 10 + '0', 0x8d59);
+			  lcd32_print_TimeFont(num_pos[1], lines_pos[0], m % 10 + '0', WHITE);
+		  }
+		  if (bef_s / 10 != s / 10) {
+			  lcd32_print_TimeFont(num_pos[3], lines_pos[0], bef_s / 10 + '0', 0x8d59);
+			  lcd32_print_TimeFont(num_pos[3], lines_pos[0], s / 10 + '0', WHITE);
+		  }
+		  if (bef_s % 10 != s % 10) {
+			  lcd32_print_TimeFont(num_pos[4], lines_pos[0], bef_s % 10 + '0', 0x8d59);
+			  lcd32_print_TimeFont(num_pos[4], lines_pos[0], s % 10 + '0', WHITE);
+		  }
+
+		  bef_m = m;
+		  bef_s = s;
+		  Timer_500m = 0;
+	  }
+	  if (seconds == -1 && !seconds_zero_flag && seconds_init_falg) {
+		  seconds_zero_flag = 1;
+		  lcd32_print_TimeFont(num_pos[0], lines_pos[0], m / 10 + '0', 0x8d59);
+		  lcd32_print_TimeFont(num_pos[1], lines_pos[0], m % 10 + '0', 0x8d59);
+		  lcd32_print_TimeFont(num_pos[2], lines_pos[0], ':', 0x8d59);
+		  lcd32_print_TimeFont(num_pos[3], lines_pos[0], s / 10 + '0', 0x8d59);
+		  lcd32_print_TimeFont(num_pos[4], lines_pos[0], s % 10 + '0', 0x8d59);
+		  lcd32_print_TimeFonts(42, lines_pos[0], (u16*)"ÈÄ", 0x8d59);
+		  lcd32_print_TimeFonts(45, lines_pos[1], (u16*)"Á¤¿¹Âøµµ", 0x8d59);
+		  lcd32_print_TimeFonts(103, lines_pos[2], (u16*)"Âøµµ", WHITE);
+	  }
   }
   /* USER CODE END 3 */
 }
@@ -166,7 +298,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL7;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -185,7 +317,7 @@ void SystemClock_Config(void)
     Error_Handler();
   }
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
-  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV4;
+  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV6;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
@@ -242,6 +374,44 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief TIM6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM6_Init(void)
+{
+
+  /* USER CODE BEGIN TIM6_Init 0 */
+
+  /* USER CODE END TIM6_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM6_Init 1 */
+
+  /* USER CODE END TIM6_Init 1 */
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 36000;
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 999;
+  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM6_Init 2 */
+
+  /* USER CODE END TIM6_Init 2 */
 
 }
 
