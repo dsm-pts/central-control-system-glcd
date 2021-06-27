@@ -195,6 +195,7 @@ int main(void)
 
   u8 num_pos[5] = {237, 202, 177, 132, 97};
   u8 lines_pos[3] = {140, 70, 100};
+  u8 ok_payload[6] = {0x02, 0x02, 0x01, 0x00, 0x00, 0x03};
 
   lcd32_print_TimeFonts(103, lines_pos[2], (u16*)"기대", WHITE);
 
@@ -204,26 +205,27 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	  if (USART1_rx_end) {
-		  // PROTOCOL : 0x02 TYPE(1byte) CMD(1byte) DATA(2byte) 0x03
-		  u8 type = Rx_Buffer[1];
+		  // PROTOCOL : 0x02 Sender(1byte) CMD(1byte) DATA(2byte) 0x03
+		  u8 sender = Rx_Buffer[1];
 		  u8 cmd = Rx_Buffer[2];
 		  u8 data[2] = { Rx_Buffer[3], Rx_Buffer[4] };
 
-		  printf("\x02RECEV : type(%d) cmd(%d) data(%x, %x)\x03", type, cmd, data[0], data[1]);
 		  // SENDER : RPI AND CMD : SET_SECONDS
-		  if (type == 1 && cmd == 1) {
+		  if (sender == 0x01 && cmd == 0x13) {
 			  seconds = (data[0] << 8) | data[1];
-		  }
-		  if (!seconds_init_falg) {
-			  lcd32_print_TimeFonts(103, lines_pos[2], (u16*)"기대", 0x8d59);
-			  lcd32_print_TimeFont(num_pos[0], lines_pos[0], m / 10 + '0', WHITE);
-			  lcd32_print_TimeFont(num_pos[1], lines_pos[0], m % 10 + '0', WHITE);
-			  lcd32_print_TimeFont(num_pos[2], lines_pos[0], ':', WHITE);
-			  lcd32_print_TimeFont(num_pos[3], lines_pos[0], s / 10 + '0', WHITE);
-			  lcd32_print_TimeFont(num_pos[4], lines_pos[0], s % 10 + '0', WHITE);
-			  lcd32_print_TimeFonts(42, lines_pos[0], (u16*)"후", WHITE);
-			  lcd32_print_TimeFonts(45, lines_pos[1], (u16*)"정예착도", WHITE);
-			  seconds_init_falg = 1;
+			  printf("%c%c%c%c%c%c", ok_payload[0], ok_payload[1], ok_payload[2], ok_payload[3], ok_payload[4], ok_payload[5]); // OK
+
+			  if (!seconds_init_falg) {
+				  lcd32_print_TimeFonts(103, lines_pos[2], (u16*)"기대", 0x8d59);
+				  lcd32_print_TimeFont(num_pos[0], lines_pos[0], m / 10 + '0', WHITE);
+				  lcd32_print_TimeFont(num_pos[1], lines_pos[0], m % 10 + '0', WHITE);
+				  lcd32_print_TimeFont(num_pos[2], lines_pos[0], ':', WHITE);
+				  lcd32_print_TimeFont(num_pos[3], lines_pos[0], s / 10 + '0', WHITE);
+				  lcd32_print_TimeFont(num_pos[4], lines_pos[0], s % 10 + '0', WHITE);
+				  lcd32_print_TimeFonts(42, lines_pos[0], (u16*)"후", WHITE);
+				  lcd32_print_TimeFonts(45, lines_pos[1], (u16*)"정예착도", WHITE);
+				  seconds_init_falg = 1;
+			  }
 		  }
 		  USART1_rx_end = 0;
 		  USART1_len = 0;
